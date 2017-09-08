@@ -15,6 +15,8 @@ Features:
   starts on randomly selected port, configuration of another service may
   refer to it.
 
+* Pure Python project works under Linux, Windows and Mac.
+
 Example
 -------
 
