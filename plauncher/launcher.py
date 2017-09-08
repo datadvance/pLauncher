@@ -594,12 +594,15 @@ class Launcher(object):
                         # Get what has already been read.
                         line = e.partial
 
-                    # Use `stdout.encoding` to handle non-ascii chars and strip
-                    # separator from the end of the line.
-                    line = line.decode(sys.stdout.encoding).rstrip()
-                    # Output line prepending it with ellispis if previous line
-                    # was truncated.
-                    logger.log(logging.INFO, line)
+                    # Do not report empty lines, proper line contains at least
+                    # line ending. Completely empty lines may occur at the EOF.
+                    if line:
+                        # Use `stdout.encoding` to handle non-ascii chars and
+                        # strip separator from the end of the line.
+                        logger.log(
+                            logging.INFO,
+                            line.decode(sys.stdout.encoding).rstrip()
+                        )
 
             # It is OK when coroutine is interrupted. For example that is what
             # happenes when user press <Control+C> to stop the process.
@@ -608,11 +611,11 @@ class Launcher(object):
 
             # Catch all the exception and report about them.
             except Exception as e:  # pylint: disable=broad-except
-                self.__logger.error('Logger %s is out of order: %s %s',
+                self.__logger.error('Logger %s is out of order: %s %s.',
                                     '{}[{}]'.format(name, process.pid),
                                     type(e), e)
             finally:
-                self.__logger.debug('Logger %s finished',
+                self.__logger.debug('Redirection to the logger %s stopped.',
                                     '{}[{}]'.format(name, process.pid))
 
         # Start tasks serving process standard output streams.
