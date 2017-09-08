@@ -1,4 +1,3 @@
-#
 # coding: utf-8
 # Copyright (c) 2017 DATADVANCE
 #
@@ -571,23 +570,58 @@ class Launcher(object):
 
         async def stream_logger(stream):
             """Auxiliary coroutine to redirect stream to logger."""
+            try:
+                logger = logging.getLogger('{}[{}]'.format(name, process.pid))
+                while not stream.at_eof():
+                    try:
+                        # Use `readuntil` instead of `readline` because it
+                        # allows to handle very long strings manually by
+                        # processing exceptions. At the moment of writing,
+                        # `readline` simply raises `ValueError` in case of very
+                        # long line.
+                        line = await stream.readuntil(
+                            separator='\n'.encode(sys.stdout.encoding)
+                        )
 
-            l = logging.getLogger('{}[{}]'.format(name, process.pid))
-            while True:
-                # empty line unambiguously indicates end of stream
-                line = await stream.readline()
-                if line:
-                    # use `stdout.encoding` to handle non-ascii chars
-                    l.log(logging.INFO,
-                          line.decode(sys.stdout.encoding).rstrip())
-                else:
-                    break
+                    # Line is too long to fit into buffer.
+                    except asyncio.streams.LimitOverrunError as e:
+                        # Read what we can read.
+                        line = await stream.read(e.consumed)
+                        line += b'...'
+
+                    # EOF occurred.
+                    except asyncio.streams.IncompleteReadError as e:
+                        # Get what has already been read.
+                        line = e.partial
+
+                    # Use `stdout.encoding` to handle non-ascii chars and strip
+                    # separator from the end of the line.
+                    line = line.decode(sys.stdout.encoding).rstrip()
+                    # Output line prepending it with ellispis if previous line
+                    # was truncated.
+                    logger.log(logging.INFO, line)
+
+            # It is OK when coroutine is interrupted. For example that is what
+            # happenes when user press <Control+C> to stop the process.
+            except asyncio.CancelledError:
+                raise
+
+            # Catch all the exception and report about them.
+            except Exception as e:  # pylint: disable=broad-except
+                self.__logger.error('Logger %s is out of order: %s %s',
+                                    '{}[{}]'.format(name, process.pid),
+                                    type(e), e)
+            finally:
+                self.__logger.debug('Logger %s finished',
+                                    '{}[{}]'.format(name, process.pid))
 
         # Start tasks serving process standard output streams.
         stdout_logger_task = asyncio.ensure_future(
-            stream_logger(process.stdout))
+            stream_logger(process.stdout)
+        )
         stderr_logger_task = asyncio.ensure_future(
-            stream_logger(process.stderr))
+            stream_logger(process.stderr)
+        )
 
         # Wait process to terminate.
         exitcode = await process.wait()
