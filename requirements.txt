@@ -1,1 +1,7 @@
--e file:.
+# File with development requirements. The difference with `setup.py` is that
+# this file contains everything needed for development while `setup.py`
+# describes the Python packages needed to install and use this package.
+
+psutil
+aiohttp>=2.2
+multidict

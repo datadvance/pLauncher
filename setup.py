@@ -63,18 +63,5 @@ setuptools.setup(
         'psutil',
         'aiohttp',
         'multidict'
-    ],
-
-    # Test dependencies and settings to run `python setup.py test`.
-    tests_require=[
-        'pytest',
-        'pytest-catchlog',
-        'pytest-pythonpath',
-    ],
-    # Use `pytest-runner` to integrate `pytest` with `setuptools` as it is
-    # described in the "Good Integration Practices" chapter in the pytest docs:
-    # https://docs.pytest.org/en/latest/goodpractices.html
-    setup_requires=[
-        'pytest-runner',
-    ],
+    ]
 )

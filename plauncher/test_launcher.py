@@ -9,8 +9,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 #
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
 # OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -41,8 +41,8 @@ import aiohttp
 
 from .launcher import Launcher
 
-# Disable warning that outer name is redefined: `pytest` dependency injection
-# works this way.
+# Disable warning that outer name is redefined: `pytest` dependency
+# injection works this way.
 # pylint: disable=redefined-outer-name
 
 
@@ -120,8 +120,8 @@ def test_main_usecase(eventloop, http_server):
         server2_resp2 = eventloop(
             http_server.ping(server2_host, server2_port2))
 
-        # Stop one of two servers to check that second one will be terminated by
-        # launcher.
+        # Stop one of two servers to check that second one will be terminated
+        # by the launcher.
         eventloop(http_server.stop(server1_host, server1_port))
 
         # Wait launcher to finish, it shall finish instantly because we have
@@ -195,7 +195,8 @@ def test_service_stopped_during_start(eventloop, print_sleep_script):
     """Test the case when service stopped during start procedure (within given
        time period).
 
-    In such cases `Launcher` must interrupt service starting procedure and exit.
+    In such cases `Launcher` must interrupt service starting procedure and
+    exit.
     """
 
     WAIT_DELAY = 0.5
@@ -222,10 +223,10 @@ def test_service_stopped_very_fast(eventloop):
     """Test assures that if service dies immediately then it raises
        `RuntimeException`.
 
-    This test is added to cover the case when process dies immediately (and very
-    fast) after it starts. There was error when creating `psutil.Process` was
-    not enclosed with try-except block (inside routing that process listens to
-    the endpoint). This lead `Launcher.run()` to fail with
+    This test is added to cover the case when process dies immediately (and
+    very fast) after it starts. There was error when creating `psutil.Process`
+    was not enclosed with try-except block (inside routing that process listens
+    to the endpoint). This lead `Launcher.run()` to fail with
     `psutil.NoSuchProcess` exception and a lot of other errors in the log.
 
     To reproduce the error (until it is fixed) is important that process exits
@@ -274,8 +275,8 @@ def test_log_redirected(eventloop, print_sleep_script, caplog):
     """Test that service output is redirected to the `logging`.
 
     Check that `Launcher` redirects output to `logging` with level
-    `logging.INFO`: capture all output and find line containing at the same time
-    unique string, process id and the service name.
+    `logging.INFO`: capture all output and find line containing at the same
+    time unique string, process id and the service name.
 
     Also check running `Launcher` with minimum number of settings.
     """
@@ -480,8 +481,8 @@ def test_environment(eventloop, print_env_script, caplog):
         eventloop(launcher.shutdown())
 
     # Check that name and value of first variable exists in output. Since we
-    # rely on global uniqueness of variable names and values we can simply check
-    # their existence as substring.
+    # rely on global uniqueness of variable names and values we can simply
+    # check their existence as substring.
     assert var_pass_name in caplog.text, (
         'expected environment variable not found')
     assert var_pass_value in caplog.text, (
@@ -530,8 +531,8 @@ def test_attempts(eventloop, print_env_script, caplog):
         finally:
             eventloop(launcher.shutdown())
 
-    # Check that unique value appears exactly proper number of times in the test
-    # output.
+    # Check that unique value appears exactly proper number of times in the
+    # test output.
     assert str(caplog.text).count(uniq) == sum(
         experiments), 'wrong number of attempts to run service'
 
@@ -613,7 +614,7 @@ def test_config_validation():
                   'endpoints': ('1.3.4.5', '')}])
 
 
-# ------------------------------------------------------------- UTILITY FIXTURES
+# ------------------------------------------------------------ UTILITY FIXTURES
 
 
 @pytest.fixture(scope='function')
@@ -643,8 +644,8 @@ def eventloop():
     # Run test providing it the way to await for futures or coroutines.
     yield asyncio.get_event_loop().run_until_complete
 
-    # Check there is no child processes left behind when test function finishes,
-    # cleanup event loop.
+    # Check there is no child processes left behind when test function
+    # finishes, cleanup event loop.
 
     children = psutil.Process().children(recursive=True)
     assert not children, 'test has left child processes'
@@ -664,13 +665,13 @@ def http_server(tmpdir_factory):
 
     This method returns a path to Python script with simple HTTP server and two
     async utility functions to work with it: `ping` and `stop`. Server is bound
-    to host and port specified as command line arguments, e.g. `python <thefile>
-    --host=127.0.0.1 --port=4242`. Server responds with the content of
-    environment variable "RESPONSE" on HTTP GET request and shutdown when it
+    to host and port specified as command line arguments, e.g. `python
+    <thefile> --host=127.0.0.1 --port=4242`. Server responds with the content
+    of environment variable "RESPONSE" on HTTP GET request and shutdown when it
     receives HTTP POST. Function `ping` accepts two parameters `host` and
-    `port`, make GET HTTP-request to the server, and returns string with request
-    responce. Function `stop` also accepts `host` and `port` parameters, sends
-    POST request to the server what makes it stop.
+    `port`, make GET HTTP-request to the server, and returns string with
+    request responce. Function `stop` also accepts `host` and `port`
+    parameters, sends POST request to the server what makes it stop.
 
     In general the script accepts multiple ports which makes it start multiple
     servers. So you can start it as 'python <thefile> --host=127.0.0.1
@@ -824,7 +825,7 @@ def print_env_script(tmpdir_factory):
     return filename
 
 
-# ------------------------------------------------------------------------- MAIN
+# ------------------------------------------------------------------------ MAIN
 
 if __name__ == '__main__':
     pytest.main(sys.argv)
