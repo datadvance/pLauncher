@@ -1,24 +1,25 @@
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
 #
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
 #
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-# OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+# IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+# CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+# TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+# SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 """
 Module with tests for `Launcher` class.
@@ -29,17 +30,20 @@ import base64
 import collections
 import inspect
 import os
+import pathlib
 import random
 import sys
 import textwrap
 import time
 import uuid
+import logging
 
+import aiohttp
 import psutil
 import pytest
-import aiohttp
 
 from .launcher import Launcher
+
 
 # Disable warning that outer name is redefined: `pytest` dependency
 # injection works this way.
@@ -50,16 +54,18 @@ def test_main_usecase(eventloop, http_server):
     """Test main use-case.
 
     Test checks the following:
-      - Two simple HTTP servers spawned by `Launcher`.
-      - Both servers use random port number specified as callable in the
-        `params` setting.
-      - Substitutions like `{ServiceName_PARAM}` works in `cmd` and `env`
-        settings.
-      - Both servers correctly respond on the ports reported by `Launcher`.
-      - Second process is given with dynamically determined parameter `port`
-        of the first one.
-      - Second server listens to two endpoints.
-      - `Launcher` terminates all services when at least one of them stops.
+    - Two simple HTTP servers spawned by `Launcher`.
+    - Both servers use random port number specified as callable in the
+      `params` setting.
+    - Substitutions like `{ServiceName_PARAM}` works in `cmd` and `env`
+      settings.
+    - Both servers correctly respond on the ports reported by
+      `Launcher`.
+    - Second process is given with dynamically determined parameter
+      `port` of the first one.
+    - Second server listens to two endpoints.
+    - `Launcher` terminates all services when at least one of them
+      stops.
     """
 
     # Configure two test servers.
@@ -68,7 +74,7 @@ def test_main_usecase(eventloop, http_server):
         'params': {
             'PORT': lambda: random.randint(49152, 65535),
             'HOST': '127.0.0.1',
-            'UNIQ': lambda: str(uuid.uuid1()),
+            'UNIQ': lambda: str(uuid.uuid4()),
         },
         'endpoints': [('{Server1_HOST}', '{Server1_PORT}')],
         'env': {
@@ -104,8 +110,8 @@ def test_main_usecase(eventloop, http_server):
     try:
         eventloop(launcher.run())
 
-        # Extract actual values of host and port from information provided by
-        # launcher.
+        # Extract actual values of host and port from information
+        # provided by launcher.
         server1_host = launcher.services['Server1'].params['HOST']
         server1_port = launcher.services['Server1'].params['PORT']
         server1_uniq = launcher.services['Server1'].params['UNIQ']
@@ -120,12 +126,12 @@ def test_main_usecase(eventloop, http_server):
         server2_resp2 = eventloop(
             http_server.ping(server2_host, server2_port2))
 
-        # Stop one of two servers to check that second one will be terminated
-        # by the launcher.
+        # Stop one of two servers to check that second one will be
+        # terminated by the launcher.
         eventloop(http_server.stop(server1_host, server1_port))
 
-        # Wait launcher to finish, it shall finish instantly because we have
-        # stopped servers already.
+        # Wait launcher to finish, it shall finish instantly because we
+        # have stopped servers already.
         eventloop(launcher.wait())
     finally:
         # Shutdown launcher.
@@ -134,22 +140,23 @@ def test_main_usecase(eventloop, http_server):
     # Check that first server responded with our unique response.
     assert server1_resp == server1_uniq
 
-    # Check that the second server responded with correct information about the
-    # first one, hence we check that context is shared properly between
-    # services.
-    assert (server2_resp1 == '{}:{}'.format(server1_host, server1_port) and
-            server2_resp2 == '{}:{}'.format(server1_host, server1_port))
+    # Check that the second server responded with correct information
+    # about the first one, hence we check that context is shared
+    # properly between services.
+    assert (server2_resp1 == f'{server1_host}:{server1_port}' and
+            server2_resp2 == f'{server1_host}:{server1_port}')
 
 
 def test_service_listens_endpoint(eventloop, http_server):
-    """Test the case when process did not listen to proper endpoint, but it is
-       listened by someone.
+    """Test the case when process did not listen to proper endpoint, but
+       it is listened by someone.
 
-    This tests configures two servers and make `Launcher` wait second server to
-    serve endpoint which it does not serve. What is more important is this
-    endpoint is served by the first server. We expect `Launcher` to interrupt
-    starting procedure and exit. Hence we make sure that `Launcher` checks not
-    only endpoint is served, but that it is served by the process it just run.
+    This tests configures two servers and make `Launcher` wait second
+    server to serve endpoint which it does not serve. What is more
+    important is this endpoint is served by the first server. We expect
+    `Launcher` to interrupt starting procedure and exit. Hence we make
+    sure that `Launcher` checks not only endpoint is served, but that it
+    is served by the process it just run.
     """
 
     # Configure two test servers.
@@ -175,8 +182,7 @@ def test_service_listens_endpoint(eventloop, http_server):
             'HOST': '127.0.0.1',
         },
         'endpoints': [('{Server1_HOST}', '{Server1_PORT}')],
-        'endpoints_timeout':
-        0.1,
+        'endpoints_timeout': 0.1,
         'cmd': [
             sys.executable, '-u', http_server.script,
             '--host={Server2_HOST}', '--port={Server2_PORT}'
@@ -191,46 +197,19 @@ def test_service_listens_endpoint(eventloop, http_server):
         eventloop(launcher.shutdown())
 
 
-def test_service_stopped_during_start(eventloop, print_sleep_script):
-    """Test the case when service stopped during start procedure (within given
-       time period).
-
-    In such cases `Launcher` must interrupt service starting procedure and
-    exit.
-    """
-
-    WAIT_DELAY = 0.5
-    test_service = {
-        'name': 'TestService',
-        'params': {
-            'DELAY': 0
-        },
-        'wait': WAIT_DELAY,
-        'cmd': [sys.executable, '-u', print_sleep_script,
-                '--delay={TestService_DELAY}'],
-    }
-
-    # Create launcher and check that it raises from the method `run`.
-    launcher = Launcher([test_service])
-    try:
-        pytest.raises(RuntimeError, eventloop, launcher.run())
-    finally:
-        # Shutdown launcher.
-        eventloop(launcher.shutdown())
-
-
 def test_service_stopped_very_fast(eventloop):
     """Test assures that if service dies immediately then it raises
        `RuntimeException`.
 
-    This test is added to cover the case when process dies immediately (and
-    very fast) after it starts. There was error when creating `psutil.Process`
-    was not enclosed with try-except block (inside routing that process listens
-    to the endpoint). This lead `Launcher.run()` to fail with
-    `psutil.NoSuchProcess` exception and a lot of other errors in the log.
+    This test is added to cover the case when process dies immediately
+    (and very fast) after it starts. There was error when creating
+    `psutil.Process` was not enclosed with try-except block (inside
+    routing that process listens to the endpoint). This lead
+    `Launcher.run()` to fail with `psutil.NoSuchProcess` exception and a
+    lot of other errors in the log.
 
-    To reproduce the error (until it is fixed) is important that process exits
-    very fast, otherwise error is masked.
+    To reproduce the error (until it is fixed) is important that process
+    exits very fast, otherwise error is masked.
     """
     test_service = {
         'name': 'TestService',
@@ -249,11 +228,11 @@ def test_service_stopped_very_fast(eventloop):
 
 
 def test_service_stopped_instead_of_listening(eventloop):
-    """Test the case when process stops instead of starting and listening to
-       the endpoint.
+    """Test the case when process stops instead of starting and
+       listening to the endpoint.
 
-    Check that in such cases `Launcher` raises `RuntimeError` exception and
-    stops.
+    Check that in such cases `Launcher` raises `RuntimeError` exception
+    and stops.
     """
 
     test_service = {
@@ -275,13 +254,12 @@ def test_log_redirected(eventloop, print_sleep_script, caplog):
     """Test that service output is redirected to the `logging`.
 
     Check that `Launcher` redirects output to `logging` with level
-    `logging.INFO`: capture all output and find line containing at the same
-    time unique string, process id and the service name.
+    `logging.INFO`: capture all output and find line containing at the
+    same time unique string, process id and the service name.
 
     Also check running `Launcher` with minimum number of settings.
     """
-
-    unique_str = str(uuid.uuid1())
+    unique_str = str(uuid.uuid4())
 
     test_service = {
         'name': 'TestService',
@@ -290,13 +268,14 @@ def test_log_redirected(eventloop, print_sleep_script, caplog):
                 '--print', unique_str],
     }
 
-    launcher = Launcher([test_service])
-    try:
-        eventloop(launcher.run())
-        pid = launcher.services['TestService'].process.pid
-        eventloop(launcher.wait())
-    finally:
-        eventloop(launcher.shutdown())
+    with caplog.at_level(logging.DEBUG):
+        launcher = Launcher([test_service])
+        try:
+            eventloop(launcher.run())
+            pid = launcher.services['TestService'].process.pid
+            eventloop(launcher.wait())
+        finally:
+            eventloop(launcher.shutdown())
 
     for r in caplog.record_tuples:
         if str(pid) in r[0] and 'TestService' in r[0] and unique_str in r[2]:
@@ -306,15 +285,15 @@ def test_log_redirected(eventloop, print_sleep_script, caplog):
 
 
 def test_service_child_process_listens_endpoint(eventloop, http_server):
-    """Test that `Launcher` handles the case when service child process listens
-       the endpoint."""
+    """Test that `Launcher` handles the case when service child process
+       listens the endpoint."""
 
     test_service = {
         'name':
         'TestService',
         'params': {
             'PORT': lambda: random.randint(49152, 65535),
-            'UNIQ': str(uuid.uuid1()),
+            'UNIQ': str(uuid.uuid4()),
         },
         'endpoints': [('127.0.0.1', '{TestService_PORT}')],
         'env': {
@@ -347,8 +326,9 @@ def test_service_child_process_listens_endpoint(eventloop, http_server):
 def test_endpoints_timeout(eventloop, print_sleep_script):
     """Test that `Launcher` respects `endpoints_timeout` setting.
 
-    Check that `Launcher` respects `endpoints_timeout` setting: check that the
-    dummy process works at least the amount of time specified in this setting.
+    Check that `Launcher` respects `endpoints_timeout` setting: check
+    that the dummy process works at least the amount of time specified
+    in this setting.
     """
     TIMEOUT_1 = 1.
     TIMEOUT_2 = 2.
@@ -368,8 +348,8 @@ def test_endpoints_timeout(eventloop, print_sleep_script):
     }
 
     # Sequentially start test service two times with different
-    # `endpoints_timeout` settings. Measure actual time until `Launcher` raises
-    # `RuntimeError` exception.
+    # `endpoints_timeout` settings. Measure actual time until `Launcher`
+    # raises `RuntimeError` exception.
     launcher = Launcher([test_service_1])
     start_ts = time.time()
     try:
@@ -388,16 +368,16 @@ def test_endpoints_timeout(eventloop, print_sleep_script):
         eventloop(launcher.shutdown())
     elapsed_2 = time.time() - start_ts
 
-    # Check that the difference between these time periods is significant -
-    # greater than at least half of timeouts difference.
+    # Check that the difference between these time periods is
+    # significant - greater than at least half of timeouts difference.
     assert elapsed_2 - elapsed_1 > (TIMEOUT_2 - TIMEOUT_1) / 2
 
 
 def test_process_exit(eventloop, http_server, print_sleep_script):
     """Test shutdown procedure when one of services terminates."""
 
-    # Configure several HTTP servers and add service, which terminates in few
-    # seconds.
+    # Configure several HTTP servers and add service, which terminates
+    # in few seconds.
     service_configs = []
     for i in range(7):
         server_cfg = {
@@ -431,15 +411,16 @@ def test_environment(eventloop, print_env_script, caplog):
     """Test that `Launcher` correctly handle system environment.
 
     Test checks the following:
-      - System environment passed to the started process.
-      - Values from `env` setting is available in the process for both new and
-        modified variables.
-      - Setting some of `env` values to `None` removes it from environment.
+    - System environment passed to the started process.
+    - Values from `env` setting is available in the process for both
+      new and modified variables.
+    - Setting some of `env` values to `None` removes it from
+      environment.
     """
 
-    # Setup three environment variables with globally unique names and values:
-    # the first shall pass as is; value of the second will be modified; the
-    # third will be removed.
+    # Setup three environment variables with globally unique names and
+    # values: the first shall pass as is; value of the second will be
+    # modified; the third will be removed.
 
     def uniq_gen():
         """Generate GUID encoded to base32 with trailing `=` removed."""
@@ -473,16 +454,17 @@ def test_environment(eventloop, print_env_script, caplog):
     }
 
     # Run launcher and capture all logs.
-    launcher = Launcher([env_printer])
-    try:
-        eventloop(launcher.run())
-        eventloop(launcher.wait())
-    finally:
-        eventloop(launcher.shutdown())
+    with caplog.at_level(logging.DEBUG):
+        launcher = Launcher([env_printer])
+        try:
+            eventloop(launcher.run())
+            eventloop(launcher.wait())
+        finally:
+            eventloop(launcher.shutdown())
 
-    # Check that name and value of first variable exists in output. Since we
-    # rely on global uniqueness of variable names and values we can simply
-    # check their existence as substring.
+    # Check that name and value of first variable exists in output.
+    # Since we rely on global uniqueness of variable names and values we
+    # can simply check their existence as substring.
     assert var_pass_name in caplog.text, (
         'expected environment variable not found')
     assert var_pass_value in caplog.text, (
@@ -500,59 +482,62 @@ def test_environment(eventloop, print_env_script, caplog):
 def test_attempts(eventloop, print_env_script, caplog):
     """Make sure `Launcher` respects the value of `attempts` setting.
 
-    Generate globally unique value and put it into environment. Run test script
-    which prints environment and make `Launcher` wait until it starts serving
-    endpoint. Since script will not do this, `Launcher` must try to restart the
-    script several times. To check the number of times `Launcher` does this we
-    count number of occurrences of the unique values in the output.
+    Generate globally unique value and put it into environment. Run test
+    script which prints environment and make `Launcher` wait until it
+    starts serving endpoint. Since script will not do this, `Launcher`
+    must try to restart the script several times. To check the number of
+    times `Launcher` does this we count number of occurrences of the
+    unique values in the output.
     """
 
     # Generate globally unique value.
     uniq = base64.b32encode(uuid.uuid4().bytes).replace(
         b'=', b'').decode().lower()
 
-    experiments = [1, 2, 4]
-    for attempts in experiments:
-        env_printer = {
-            'name': 'EnvPrinter',
-            'env': {
-                'VARIABLE': uniq
-            },
-            'wait': 5,
-            'attempts': attempts,
-            'cmd': [sys.executable, '-u', print_env_script, uniq],
-        }
+    with caplog.at_level(logging.DEBUG):
+        experiments = [1, 2, 4]
+        for attempts in experiments:
+            env_printer = {
+                'name': 'EnvPrinter',
+                'env': {'VARIABLE': uniq},
+                'endpoints': [('1.2.3.4', 42)],
+                'endpoints_timeout': sys.float_info.epsilon,
+                'attempts': attempts,
+                'cmd': [sys.executable, '-u', print_env_script, uniq],
+            }
 
-        # Run launcher.
-        launcher = Launcher([env_printer])
-        try:
-            pytest.raises(RuntimeError, eventloop, launcher.run())
-            eventloop(launcher.wait())
-        finally:
-            eventloop(launcher.shutdown())
+            # Run launcher.
+            launcher = Launcher([env_printer])
+            try:
+                pytest.raises(RuntimeError, eventloop, launcher.run())
+                eventloop(launcher.wait())
+            finally:
+                eventloop(launcher.shutdown())
 
-    # Check that unique value appears exactly proper number of times in the
-    # test output.
-    assert str(caplog.text).count(uniq) == sum(
-        experiments), 'wrong number of attempts to run service'
+    # Check that unique value appears exactly proper number of times in
+    # the test output.
+    assert str(caplog.text).count(uniq) == sum(experiments), (
+        'wrong number of attempts to run service'
+    )
 
 
 def test_launcher_name(eventloop, caplog):
     """Check that `Launcher` uses `name` argument as logger name"""
 
-    unique_str = str(uuid.uuid1())
+    unique_str = str(uuid.uuid4())
 
     test_service = {
         'name': 'TestService',
         'cmd': [sys.executable, '-c', 'pass'],
     }
 
-    launcher = Launcher([test_service], name=unique_str)
-    try:
-        eventloop(launcher.run())
-        eventloop(launcher.wait())
-    finally:
-        eventloop(launcher.shutdown())
+    with caplog.at_level(logging.DEBUG):
+        launcher = Launcher([test_service], name=unique_str)
+        try:
+            eventloop(launcher.run())
+            eventloop(launcher.wait())
+        finally:
+            eventloop(launcher.shutdown())
 
     for record in caplog.records:
         if record.name == unique_str:
@@ -613,6 +598,260 @@ def test_config_validation():
     check_fails([{'name': 'NoOp', 'cmd': noop_cmd,
                   'endpoints': ('1.3.4.5', '')}])
 
+    # Check wrong value: wait
+    check_fails([{'name': 'NoOp', 'cmd': noop_cmd, 'wait': 'somestr'}])
+
+    # Check wrong value: wait_timeout
+    check_fails([{'name': 'NoOp', 'cmd': noop_cmd, 'wait_timeout': -1}])
+    check_fails([{'name': 'NoOp', 'cmd': noop_cmd, 'wait_timeout': 'somestr'}])
+
+
+def test_files(eventloop, tmpdir, print_file_script, caplog):
+    """Check file processing.
+
+    Test makes sure that:
+    - specified files created with proper content;
+    - parameter substitutions works in the file body and the file name;
+    - name of created file corresponds to the key in the `files`
+      dictionary;
+    - temporary files are removed when service finishes;
+    - temporary files are removed when service fails.
+    """
+
+    uniq1 = str(uuid.uuid4())
+    uniq2 = str(uuid.uuid4())
+    filename1 = str(pathlib.Path(tmpdir) / str(uuid.uuid4()))
+    filename2 = str(pathlib.Path(tmpdir) / str(uuid.uuid4()))
+    file_printer = {
+        'name': 'Service',
+        'params': {
+            'UNIQ1': uniq1,
+            'UNIQ2': uniq2,
+            'FILENAME1': filename1,
+            'FILENAME2': filename2,
+        },
+        'files': {
+            '{Service_FILENAME1}': '{Service_UNIQ1}',
+            '{Service_FILENAME2}': '{Service_UNIQ2}',
+        },
+        'cmd': [
+            sys.executable, '-u', print_file_script,
+            '{Service_FILENAME1}', '{Service_FILENAME2}'
+        ],
+    }
+
+    # Run the launcher and capture all logs.
+    with caplog.at_level(logging.DEBUG):
+        launcher = Launcher([file_printer])
+        try:
+            eventloop(launcher.run())
+            eventloop(launcher.wait())
+        finally:
+            eventloop(launcher.shutdown())
+
+    # Check written out file context.
+    assert uniq1 in caplog.text, 'file not found or context is wrong'
+    assert uniq2 in caplog.text, 'file not found or context is wrong'
+    # Make sure temporary files removed.
+    assert not os.path.exists(filename1), 'file is not removed'
+    assert not os.path.exists(filename2), 'file is not removed'
+    assert filename1 in launcher.services['Service'].files
+    assert filename2 in launcher.services['Service'].files
+
+    # Check that file removed when service fails.
+    filename = str(pathlib.Path(tmpdir) / str(uuid.uuid4()))
+    fail_service = {
+        'name': 'Service',
+        'params': {'FILENAME': filename},
+        'endpoints': [('1.2.3.4', 42)],
+        'endpoints_timeout': sys.float_info.epsilon,
+        'files': {'{Service_FILENAME}': ''},
+        'cmd': [sys.executable, '-u', 'pass'],
+    }
+    launcher = Launcher([fail_service])
+    try:
+        pytest.raises(RuntimeError, eventloop, launcher.run())
+        eventloop(launcher.wait())
+    finally:
+        eventloop(launcher.shutdown())
+    assert not os.path.exists(filename), ('file is not removed when service '
+                                          'fails')
+
+
+def test_files_dirs_workdir(eventloop, tmpdir, print_file_script, caplog):
+    """Check `dirs` and `workdir` settings.
+
+    Test makes sure that:
+    - Working directory of service is set up correctly.
+    - Is file specified without path it is created in the service
+      working directory.
+    - Additional directory is created from a prototype.
+    - Additional directory is created without prototype.
+    - Additional directories are removed when service stops.
+    - Additional directories are removed when service fails.
+    """
+
+    # There will be three files:
+    # - the first relies in the prototype directory, which is also set
+    #   as the working directory of the service;
+    # - the second is created in the working directory by `Launcher`
+    #   using `files` setting;
+    # - the third is created again by the Launcher, but in the another
+    #   directory.
+
+    # Prepare paths.
+    protodir = pathlib.Path(tmpdir) / 'protodir'
+    filename1 = str(uuid.uuid4())
+    filename2 = str(uuid.uuid4())
+    filename3 = str(uuid.uuid4())
+    content1 = str(uuid.uuid4())
+    content2 = str(uuid.uuid4())
+    content3 = str(uuid.uuid4())
+    workdir = os.path.join(tmpdir, str(uuid.uuid4()))
+    somedir = os.path.join(tmpdir, str(uuid.uuid4()))
+
+    # Create a prototype directory with a file inside.
+    os.makedirs(protodir)
+    with open(protodir / filename1, 'w') as f:
+        f.write(content1)
+
+    # Configure service.
+    service = {
+        'name': 'Service',
+        'params': {
+            'WORKDIR': workdir,
+            'SOMEDIR': somedir,
+            'FILENAME1': filename1,
+            'FILENAME2': filename2,
+            'FILEPATH3': '{Service_SOMEDIR}' + os.path.sep + filename3,
+        },
+        'dirs': {
+            '{Service_WORKDIR}': protodir,
+            '{Service_SOMEDIR}': None,
+        },
+        'files': {
+            '{Service_FILENAME2}': content2,
+            '{Service_FILEPATH3}': content3,
+        },
+        'workdir': '{Service_WORKDIR}',
+        'cmd': [
+            sys.executable, '-u',
+            print_file_script,
+            '{Service_FILENAME1}', '{Service_FILENAME2}', '{Service_FILEPATH3}'
+        ],
+    }
+
+    with caplog.at_level(logging.DEBUG):
+        launcher = Launcher([service])
+        try:
+            eventloop(launcher.run())
+            eventloop(launcher.wait())
+        finally:
+            eventloop(launcher.shutdown())
+
+    assert filename1 in caplog.text
+    assert filename2 in caplog.text
+    assert filename3 in caplog.text
+    assert content1 in caplog.text
+    assert content2 in caplog.text
+    assert content3 in caplog.text
+
+    assert not os.path.exists(workdir), ('Directory created by `dirs` is not '
+                                         'removed!')
+    assert not os.path.exists(somedir), ('Directory created by `dirs` is not '
+                                         'removed!')
+
+    # Update configuration to make service fail on start and check that
+    # directories are removed.
+    service.update({
+        'endpoints': [('1.2.3.4', 42)],
+        'endpoints_timeout': sys.float_info.epsilon,
+    })
+    launcher = Launcher([service])
+    try:
+        pytest.raises(RuntimeError, eventloop, launcher.run())
+        eventloop(launcher.wait())
+    finally:
+        eventloop(launcher.shutdown())
+    assert not os.path.exists(workdir), ('Directory created by `dirs` is not '
+                                         'removed when service fails!')
+    assert not os.path.exists(somedir), ('Directory created by `dirs` is not '
+                                         'removed when service fails!')
+
+
+def test_wait_timeout(eventloop, caplog, print_sleep_script):
+    """Check settings `wait` and `wait_timeout`.
+
+    - Run two processes. The first one with `wait` set to `True`. Make
+      sure that when second process starts the first one has already
+      finished.
+    - Run endless process with `wait` and `wait_timeout` set. Make sure
+      `Launcher` finishes with error.
+    """
+
+    # Run two processes. Second one checks that the first one is not
+    # running. We use unique marker in the command line to check the
+    # process existence. Unique flags are printed out for checks.
+
+    proc1_flag = str(uuid.uuid4())
+    proc2_flag = str(uuid.uuid4())
+    proc2_do_not_see_proc1_flag = str(uuid.uuid4())
+    services = [
+        {
+            'name': 'Process1',
+            'cmd': [sys.executable, '-u',
+                    print_sleep_script, '--delay=0.5', '--print', proc1_flag],
+            'wait': True,
+        },
+        {
+            'name': 'Process2',
+            'cmd': [
+                sys.executable, '-c',
+                textwrap.dedent(f'''
+                    print('{proc2_flag}')
+                    from psutil import *;
+                    print([p.cmdline() for p in process_iter()
+                                         if p.pid != Process().pid])
+                    if ('{proc1_flag}' not in
+                        str([p.cmdline() for p in process_iter()
+                                         if p.pid != Process().pid])):
+                        print('{proc2_do_not_see_proc1_flag}'*2)
+                ''')
+            ]
+        },
+    ]
+
+    with caplog.at_level(logging.DEBUG):
+        launcher = Launcher(services)
+        try:
+            eventloop(launcher.run())
+            eventloop(launcher.wait())
+        finally:
+            eventloop(launcher.shutdown())
+
+    messages = [r[2] for r in caplog.record_tuples]
+    assert proc1_flag in messages, 'The first process did not run!'
+    assert proc2_flag in messages, 'The second process did not run!'
+    assert proc2_do_not_see_proc1_flag * 2 in caplog.text, (
+        'Second process detected the first one, `wait` did not work!'
+    )
+
+    # Run endless process with `wait` and `wait_timeout` set. Make sure
+    # `Launcher` finishes with error.
+
+    service = {
+        'name': 'EndlessProcess',
+        'cmd': [sys.executable, '-u', print_sleep_script, '--delay=100500'],
+        'wait': True,
+        'wait_timeout': 0.1,
+    }
+
+    launcher = Launcher([service])
+    try:
+        pytest.raises(RuntimeError, eventloop, launcher.run())
+        eventloop(launcher.wait())
+    finally:
+        eventloop(launcher.shutdown())
 
 # ------------------------------------------------------------ UTILITY FIXTURES
 
@@ -621,10 +860,10 @@ def test_config_validation():
 def eventloop():
     """Fixture provides eventloop to tests and perform cleanup checks.
 
-    Fixture provides eventloop to tests and check that test did not leave child
-    processes or pending tasks. It yields callable which accepts coroutine or
-    future and wait until it completes. It is needed to `await` in synchronous
-    code.
+    Fixture provides eventloop to tests and check that test did not
+    leave child processes or pending tasks. It yields callable which
+    accepts coroutine or future and wait until it completes. It is
+    needed to `await` in synchronous code.
 
     Yields:
         Callable which wait given coroutine or future to complete from
@@ -663,32 +902,35 @@ def http_server(tmpdir_factory):
     """Prepare test HTTP server: Python file with code, and utility functions
        for request and stop.
 
-    This method returns a path to Python script with simple HTTP server and two
-    async utility functions to work with it: `ping` and `stop`. Server is bound
-    to host and port specified as command line arguments, e.g. `python
-    <thefile> --host=127.0.0.1 --port=4242`. Server responds with the content
-    of environment variable "RESPONSE" on HTTP GET request and shutdown when it
-    receives HTTP POST. Function `ping` accepts two parameters `host` and
-    `port`, make GET HTTP-request to the server, and returns string with
-    request responce. Function `stop` also accepts `host` and `port`
-    parameters, sends POST request to the server what makes it stop.
+    This method returns a path to Python script with simple HTTP server
+    and two async utility functions to work with it: `ping` and `stop`.
+    Server is bound to host and port specified as command line
+    arguments, e.g. `python <thefile> --host=127.0.0.1 --port=4242`.
+    Server responds with the content of environment variable "RESPONSE"
+    on HTTP GET request and shutdown when it receives HTTP POST.
+    Function `ping` accepts two parameters `host` and `port`, make GET
+    HTTP-request to the server, and returns string with request
+    response. Function `stop` also accepts `host` and `port` parameters,
+    sends POST request to the server what makes it stop.
 
-    In general the script accepts multiple ports which makes it start multiple
-    servers. So you can start it as 'python <thefile> --host=127.0.0.1
-    --port=4242 4444` to serve two ports `4242` and `4444`.
+    In general the script accepts multiple ports which makes it start
+    multiple servers. So you can start it as 'python <thefile>
+    --host=127.0.0.1 --port=4242 4444` to serve two ports `4242` and
+    `4444`.
 
     Returns:
         Object with the following fields:
-            script: Path to the Python file representing test HTTP server.
-            ping: Callable accepting two parameters `host` and `port`, makes
-                HTTP-request to the server, and returns a string with request
-                responce.
-            stop: Callable accepting two parameters `host` and `port` sends
-                POST request to the server which makes it stop.
+            script: Path to the Python file representing test HTTP
+                server.
+            ping: Callable accepting two parameters `host` and `port`,
+                makes HTTP-request to the server, and returns a string
+                with request response.
+            stop: Callable accepting two parameters `host` and `port`
+                sends POST request to the server which makes it stop.
     """
 
     def http_server():
-        """Source of this function is written out to a file used in tests."""
+        """Source of the function writes out to a file for tests."""
         import argparse
         import http.server
         import os
@@ -749,14 +991,14 @@ def http_server(tmpdir_factory):
 
     async def ping_server(host, port):
         """Make GET request to test HTTP server."""
-        url = 'http://{host}:{port}'.format(host=host, port=port)
+        url = f'http://{host}:{port}'
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 return await response.text()
 
     async def stop_server(host, port):
         """Stop test HTTP server, by sending it POST request."""
-        url = 'http://{host}:{port}'.format(host=host, port=port)
+        url = f'http://{host}:{port}'
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url):
@@ -769,15 +1011,15 @@ def http_server(tmpdir_factory):
 
 @pytest.fixture(scope='session')
 def print_sleep_script(tmpdir_factory):
-    """Prepare test program which prints given string and sleep for specified
-       amount of time.
+    """Prepare test program which prints given string and sleep for
+       specified amount of time.
 
-    This method returns a path to the Python script file which prints string
-    given as `--print` command line argument, sleeps for number of seconds set
-    by `--delay` and terminates.
+    This method returns a path to the Python script file which prints
+    string given as `--print` command line argument, sleeps for number
+    of seconds set by `--delay` and terminates.
 
     Returns:
-      Path to Python script.
+        Path to Python script.
     """
 
     script = textwrap.dedent(
@@ -803,11 +1045,11 @@ def print_sleep_script(tmpdir_factory):
 def print_env_script(tmpdir_factory):
     """Prepare test program which prints current environment.
 
-    Program accepts a single command line argument which is used as to filter
-    out all unrelated environment variables.
+    Program accepts a single command line argument which is used as to
+    filter out all unrelated environment variables.
 
     Returns:
-      Path to Python script.
+        Path to Python script.
     """
 
     script = textwrap.dedent(
@@ -825,7 +1067,30 @@ def print_env_script(tmpdir_factory):
     return filename
 
 
+@pytest.fixture(scope='session')
+def print_file_script(tmpdir_factory):
+    """Prepare script which prints files specified in the command line.
+
+    Script treats command line arguments as filenames of a files to
+    output to `stdout`. The output is simple: `filename: file content`.
+
+    Returns:
+        Path to Python script.
+    """
+
+    script = textwrap.dedent('''
+        import sys
+        for filename in sys.argv[1:]:
+            with open(filename) as f:
+                print(f'{filename}:', f.read())
+    ''')
+    filename = tmpdir_factory.mktemp('print_file').join('print_file.py')
+    with open(filename, 'w') as f:
+        f.write(script)
+    return filename
+
 # ------------------------------------------------------------------------ MAIN
+
 
 if __name__ == '__main__':
     pytest.main(sys.argv)

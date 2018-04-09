@@ -2,7 +2,7 @@
 
 #
 # coding: utf-8
-# Copyright (c) 2017 DATADVANCE
+# Copyright (c) 2018 DATADVANCE
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,9 @@
 # SOFTWARE.
 
 import os
+
 import setuptools
+
 
 with open(os.path.join(os.path.dirname(__file__), 'README.rst')) as readme:
     README = readme.read()
@@ -61,7 +63,7 @@ setuptools.setup(
     packages=setuptools.find_packages(exclude=['test', 'doc']),
     install_requires=[
         'psutil',
-        'aiohttp',
+        'aiohttp>=3.1',
         'multidict'
     ]
 )
